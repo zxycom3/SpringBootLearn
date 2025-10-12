@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: Lession2
+  datasource:
+    url: jdbc:h2:mem:testdb       # H2 内存数据库（应用重启后数据丢失，适合开发/测试）
+    driver-class-name: org.h2.Driver # H2 驱动类
+    username: sa                    # H2 默认用户名
+    password:                       # H2 默认无密码（可根据需求设置）
+    type: com.zaxxer.hikari.HikariDataSource # 指定数据源（Spring Boot 默认用 HikariCP，显式配置更清晰）
+  h2:
+    console:
+      enabled: true                # 启用 H2 Web 控制台
+      path: /h2-console            # 控制台访问路径（浏览器访问：http://localhost:端口/h2-console）
+      settings:
+        web-allow-others: false    # 禁止外部机器访问控制台（开发环境更安全，生产建议关闭控制台）
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect # 明确 Hibernate 方言，适配 H2 数据库
+    hibernate:
+      ddl-auto: update             # 开发环境：自动更新表结构；生产建议用 validate/none
+    show-sql: true                 # 控制台打印 SQL 语句
+    properties:
+      hibernate:
+        format_sql: true           # 格式化 SQL 语句（便于阅读）
+    open-in-view: false            # 关闭 Open-in-View 模式（避免懒加载异常、提升性能）
+
+#app:
+#  name: "HelloSpringBoot"  # 自定义你需要的名称
+
+
