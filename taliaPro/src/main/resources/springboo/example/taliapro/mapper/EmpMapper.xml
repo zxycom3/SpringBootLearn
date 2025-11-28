@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="springboo.example.taliapro.mapper.EmpMapper">
+    <insert id="save">
+        insert into talias.emp(username, name, gender, image, job, entrydate, dept_id, create_time, update_time)
+        values (#{username},#{name},#{gender},#{image},#{job},#{entrydate},#{deptId},#{createTime},#{updateTime})
+    </insert>
+    <update id="update">
+         update emp
+         <set>
+             <if test="username!=null">
+             username=#{username},
+             </if>
+             <if test="password!=null">
+             password=#{password},
+             </if>
+             <if test="name!=null">
+             name=#{name},
+             </if>
+             <if test="gender!=null">
+             gender=#{gender},
+             </if>
+             <if test="image!=null">
+                 image=#{image},
+             </if>
+             <if test="job!=null">
+             job=#{job},
+             </if>
+             <if test="entrydate!=null">
+             entrydate=#{entrydate},
+             </if>
+             <if test="deptId!=null">
+             dept_id=#{deptId},
+             </if>
+             <if test="updateTime!=null">
+             update_time=#{updateTime}
+             </if>
+         </set>
+         where id=#{id}
+    </update>
+    <delete id="delete">
+           delete from talias.emp
+        <where>
+           id in
+        <foreach collection="ids" item="id" separator="," open="(" close=")">
+               #{id}
+        </foreach>
+        </where>
+    </delete>
+    <select id="emplist" resultType="springboo.example.taliapro.pojo.Emp">
+        select *  from talias.emp
+       <where>
+            <if test="name!=null">
+                name like concat('%', #{name} ,'%')
+            </if>
+            <if test="gender!=null">
+             and gender=#{gender}
+            </if>
+            <if test="begin!=null and end!=null">
+           and entrydate   between #{begin}  and #{end}
+           </if>
+        </where>
+       order by  update_time  DESC
+   </select>
+    <select id="countEmpByMonth" resultType="java.lang.Integer">
+        <!-- 1. 用 COUNT(*) 统计人数，而非 SELECT * -->
+        <!-- 2. 用 LPAD 补零：将月份转为2位（1→01、12→12），确保格式匹配 -->
+        SELECT COUNT(*)
+        FROM talias.emp
+        WHERE DATE_FORMAT(entrydate, '%Y-%m') = CONCAT(#{year}, '-', LPAD(#{month}, 2, '0'))
+    </select>
+</mapper>

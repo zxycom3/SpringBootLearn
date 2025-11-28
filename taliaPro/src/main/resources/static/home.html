@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>系统首页</title>
+    <style>
+        body { text-align: center; margin-top: 50px; font-family: sans-serif; }
+        h1 { color: #1989fa; margin-bottom: 20px; }
+        .user-info { color: #666; margin: 20px 0; }
+        .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 0 10px; }
+        .logout { background: #f53f3f; color: white; }
+        .test-api { background: #1989fa; color: white; }
+        .api-result { margin-top: 20px; color: #333; padding: 10px; max-width: 600px; margin-left: auto; margin-right: auto; }
+    </style>
+</head>
+<body>
+<h1>欢迎登录系统首页</h1>
+<div class="user-info" id="userInfo"></div>
+
+<button class="btn test-api" onclick="testAuthApi()">测试权限接口</button>
+<button class="btn logout" onclick="logout()">退出登录</button>
+
+<div class="api-result" id="apiResult"></div>
+
+<!-- 引入 axios（首页调用接口需要） -->
+<script src="https://unpkg.com/axios@1.6.8/dist/axios.min.js"></script>
+<script>
+    // 页面加载时校验 Token（防止直接访问首页）
+    window.onload = function() {
+        const token = localStorage.getItem('jwtToken');
+        const username = localStorage.getItem('username');
+
+        console.log('Home页面加载，Token:', token); // 调试
+        console.log('Home页面加载，用户名:', username); // 调试
+
+        // 无 Token 或用户名 → 强制跳回登录页
+        if (!token || !username) {
+            alert('请先登录！');
+            window.location.href = 'login.html';
+            return;
+        }
+
+        // 显示当前登录用户
+        document.getElementById('userInfo').innerText = `当前用户：${username}`;
+
+        // 配置 axios 拦截器（首页调用接口需携带 Token）
+        axios.interceptors.request.use(
+            (config) => {
+                config.headers['token'] = token;
+                return config;
+            },
+            (error) => {
+                return Promise.reject(error);
+            }
+        );
+
+        // 拦截 Token 失效 - 修正判断条件
+        axios.interceptors.response.use(
+            (response) => {
+                // 修正：使用 code 字段判断 Token 失效
+                if (response.data && response.data.code === 0 && response.data.msg === "NOT+LOGIN") {
+                    localStorage.removeItem('jwtToken');
+                    localStorage.removeItem('username');
+                    alert('登录已过期，请重新登录！');
+                    window.location.href = 'login.html';
+                }
+                return response;
+            },
+            (error) => {
+                alert('请求失败：' + (error.message || '网络异常'));
+                return Promise.reject(error);
+            }
+        );
+    };
+
+    // 测试需要权限的接口 - 修正判断条件
+    function testAuthApi() {
+        axios.get('http://localhost:8080/emps')
+            .then(res => {
+                // 修正：使用 code 字段判断成功
+                if (res.data.code === 1) {
+                    document.getElementById('apiResult').innerText = '接口调用成功：' + JSON.stringify(res.data.data);
+                } else {
+                    document.getElementById('apiResult').innerText = '接口调用失败：' + res.data.msg;
+                }
+            })
+            .catch(err => {
+                document.getElementById('apiResult').innerText = '接口调用失败：' + err.message;
+            });
+    }
+
+    // 退出登录：清除 Token 并跳回登录页
+    function logout() {
+        localStorage.removeItem('jwtToken');
+        localStorage.removeItem('username');
+        window.location.href = 'login.html';
+    }
+</script>
+</body>
+</html>

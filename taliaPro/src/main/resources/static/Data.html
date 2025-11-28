@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>年度员工数量统计</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.6.8/dist/axios.min.js"></script>
+    <!-- 保持Chart.js不变，无需新增库 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; }
+        body {
+            background-color: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 30px 20px;
+        }
+        .stat-container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 1200px;
+        }
+        .stat-title {
+            text-align: center;
+            font-size: 24px;
+            color: #1989fa;
+            margin-bottom: 30px;
+            font-weight: 600;
+            border-bottom: 1px solid #f0f0f0;
+            padding-bottom: 15px;
+        }
+        .filter-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            padding: 0 10px;
+        }
+        .filter-label {
+            color: #333;
+            font-size: 14px;
+        }
+        .filter-select {
+            padding: 10px 15px;
+            border: 1px solid #e5e6eb;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .filter-select:focus {
+            outline: none;
+            border-color: #1989fa;
+            box-shadow: 0 0 0 2px rgba(25, 137, 250, 0.1);
+        }
+        .query-btn {
+            padding: 10px 24px;
+            background: #1989fa;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .query-btn:hover {
+            background: #0e75d4;
+        }
+        /* 图表容器：左右分栏布局 */
+        .charts-wrapper {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .chart-card {
+            flex: 1;
+            min-width: 350px;
+            background: #fafafa;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        .chart-card-title {
+            font-size: 16px;
+            color: #333;
+            margin-bottom: 15px;
+            text-align: center;
+            font-weight: 500;
+        }
+        .chart-content {
+            width: 100%;
+            height: 350px;
+        }
+        .msg {
+            text-align: center;
+            margin-top: 15px;
+            min-height: 20px;
+            color: red;
+            font-size: 14px;
+        }
+        /* 响应式适配 */
+        @media (max-width: 768px) {
+            .filter-bar {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .chart-content {
+                height: 300px;
+            }
+            .stat-container {
+                padding: 20px 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="stat-container">
+        <h2 class="stat-title">年度员工数量统计分析</h2>
+
+        <!-- 筛选栏：选择统计年份 -->
+        <div class="filter-bar">
+            <label class="filter-label">统计年份：</label>
+            <select class="filter-select" v-model="selectYear">
+                <option :value="year" v-for="year in yearList" :key="year">{{ year }}年</option>
+            </select>
+            <button class="query-btn" @click="getEmpCountByMonth">查询</button>
+        </div>
+
+        <!-- 图表容器：折线图 + 饼图 左右分栏 -->
+        <div class="charts-wrapper">
+            <!-- 折线图卡片 -->
+            <div class="chart-card">
+                <h3 class="chart-card-title">月度员工数量趋势</h3>
+                <div class="chart-content">
+                    <canvas id="empCountLineChart"></canvas>
+                </div>
+            </div>
+
+            <!-- 饼图卡片（新增） -->
+            <div class="chart-card">
+                <h3 class="chart-card-title">各月份在职人数占比</h3>
+                <div class="chart-content">
+                    <canvas id="empCountPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- 消息提示 -->
+        <div class="msg">{{ message }}</div>
+    </div>
+</div>
+
+<script>
+    const { createApp, ref, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            // 年份相关数据
+            const currentYear = new Date().getFullYear();
+            const selectYear = ref(currentYear);
+            const yearList = ref([currentYear - 2, currentYear - 1, currentYear, currentYear + 1]);
+
+            // 图表实例（折线图 + 饼图）
+            const lineChartInstance = ref(null);
+            const pieChartInstance = ref(null);
+            const message = ref('');
+
+            // 月份名称
+            const monthNames = ref(['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']);
+
+            // 初始化折线图（保持原有逻辑不变）
+            const initLineChart = (totalData, newData) => {
+                const ctx = document.getElementById('empCountLineChart').getContext('2d');
+                if (lineChartInstance.value) lineChartInstance.value.destroy();
+
+                lineChartInstance.value = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: monthNames.value,
+                        datasets: [
+                            {
+                                label: '月末在职总人数',
+                                data: totalData,
+                                borderColor: '#1989fa',
+                                backgroundColor: 'rgba(25, 137, 250, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                fill: true
+                            },
+                            {
+                                label: '当月新增人数',
+                                data: newData,
+                                borderColor: '#4cd964',
+                                backgroundColor: 'rgba(76, 217, 100, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.3,
+                                fill: true
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: '人数' },
+                                ticks: { stepSize: 1, precision: 0 }
+                            },
+                            x: { title: { display: true, text: '月份' } }
+                        },
+                        plugins: {
+                            legend: { position: 'top' },
+                            tooltip: { mode: 'index', intersect: false }
+                        }
+                    }
+                });
+            };
+
+            // 初始化饼图（复用折线图的在职总人数数据）
+            const initPieChart = (totalData) => {
+                const ctx = document.getElementById('empCountPieChart').getContext('2d');
+                if (pieChartInstance.value) pieChartInstance.value.destroy();
+
+                // 处理饼图数据：过滤掉0值（避免占比为0的月份显示）
+                const pieData = totalData.map((value, index) => ({
+                    label: monthNames.value[index],
+                    value: value,
+                    percentage: totalData.reduce((sum, val) => sum + val, 0) > 0
+                        ? ((value / totalData.reduce((sum, val) => sum + val, 0)) * 100).toFixed(1)
+                        : '0.0'
+                })).filter(item => item.value > 0); // 只显示有数据的月份
+
+                // 饼图配色（和折线图主色呼应，渐变色系）
+                const colors = [
+                    '#1989fa', '#36a2eb', '#4fc3f7', '#64b5f6', '#90caf9',
+                    '#4cd964', '#81c784', '#a5d6a7', '#c8e6c9', '#e8f5e9',
+                    '#ff9500', '#ffb74d'
+                ];
+
+                pieChartInstance.value = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: pieData.map(item => item.label),
+                        datasets: [{
+                            label: '在职人数占比',
+                            data: pieData.map(item => item.value),
+                            backgroundColor: colors.slice(0, pieData.length), // 适配数据长度
+                            borderColor: '#fff',
+                            borderWidth: 2,
+                            hoverOffset: 8 // hover时偏移效果
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    // 图例显示：标签 + 占比
+                                    formatter: (context) => {
+                                        const item = pieData[context.dataIndex];
+                                        return `${item.label}: ${item.value}人 (${item.percentage}%)`;
+                                    },
+                                    font: { size: 11 }
+                                }
+                            },
+                            tooltip: {
+                                //  tooltip显示：标签 + 人数 + 占比
+                                formatter: (context) => {
+                                    const item = pieData[context.dataIndex];
+                                    return `
+                                        <div>${item.label}</div>
+                                        <div>人数：${item.value}人</div>
+                                        <div>占比：${item.percentage}%</div>
+                                    `;
+                                }
+                            }
+                        }
+                    }
+                });
+            };
+
+            // 从后端查询数据（保持原有逻辑，新增饼图初始化调用）
+            const getEmpCountByMonth = async () => {
+                message.value = '加载中...';
+                const token = localStorage.getItem('token');
+
+                if (!token) {
+                    message.value = '未登录，请先登录！';
+                    setTimeout(() => window.location.href = 'http://localhost:8080/login.html', 1500);
+                    return;
+                }
+
+                try {
+                    const response = await axios.get('http://localhost:8080/data/stats/employee', {
+                        params: { year: selectYear.value },
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    const resData = response.data;
+                    if (resData && resData.code === 1) {
+                        message.value = '';
+                        const monthData = resData.data;
+                        const totalCountList = new Array(12).fill(0);
+                        const newCountList = new Array(12).fill(0);
+
+                        monthData.forEach(item => {
+                            const index = item.month - 1;
+                            totalCountList[index] = item.total;
+                            newCountList[index] = item.new;
+                        });
+
+                        // 同时初始化折线图和饼图（复用totalCountList数据）
+                        initLineChart(totalCountList, newCountList);
+                        initPieChart(totalCountList);
+                    } else {
+                        message.value = resData.msg || '数据查询失败';
+                    }
+                } catch (error) {
+                    console.error('查询失败:', error);
+                    message.value = '查询失败: ' + (error.message || '网络错误');
+                }
+            };
+
+            // 页面加载时默认查询当前年份数据
+            onMounted(() => {
+                getEmpCountByMonth();
+            });
+
+            return {
+                selectYear,
+                yearList,
+                message,
+                getEmpCountByMonth
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

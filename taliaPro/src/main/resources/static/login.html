@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>系统登录</title>
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://unpkg.com/axios@1.6.8/dist/axios.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; font-family: "Microsoft YaHei", sans-serif; }
+    body { background-color: #f5f7fa; display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+    .login-container { background: white; padding: 40px 30px; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); width: 100%; max-width: 400px; }
+    .login-title { text-align: center; font-size: 24px; color: #1989fa; margin-bottom: 30px; }
+    .form-item { margin-bottom: 20px; }
+    .form-label { display: block; margin-bottom: 5px; color: #333; }
+    .form-input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+    .login-btn { width: 100%; padding: 12px; background: #1989fa; color: white; border: none; border-radius: 4px; cursor: pointer; }
+    .msg { text-align: center; margin-top: 15px; min-height: 20px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="login-container">
+    <h2 class="login-title">系统登录</h2>
+
+    <div class="form-item">
+      <label class="form-label">用户名</label>
+      <input type="text" class="form-input" v-model="username" placeholder="请输入用户名">
+    </div>
+
+    <div class="form-item">
+      <label class="form-label">密码</label>
+      <input type="password" class="form-input" v-model="password" placeholder="请输入密码">
+    </div>
+
+    <button class="login-btn" @click="login">登录</button>
+
+    <div class="msg" :style="{color: messageColor}">{{ message }}</div>
+  </div>
+</div>
+
+<script>
+  const { createApp, ref } = Vue;
+
+  createApp({
+    setup() {
+      const username = ref('');
+      const password = ref('');
+      const message = ref('');
+      const messageColor = ref('red');
+
+      const login = async () => {
+        console.log('开始登录');
+
+        if (!username.value || !password.value) {
+          message.value = '请输入用户名和密码';
+          return;
+        }
+
+        try {
+          console.log('发送请求到后端');
+
+          const response = await axios.post('/login', {
+            username: username.value,
+            password: password.value
+          }, {
+            baseURL: 'http://localhost:8080'  // 明确指定基础URL
+          });
+
+          console.log('收到响应:', response.data);
+
+          if (response.data && response.data.code === 1) {
+            message.value = '登录成功！正在跳转...';
+            messageColor.value = 'green';
+
+            // 存储token
+            localStorage.setItem('token', response.data.data);
+            localStorage.setItem('user', username.value);
+           window.location.href = 'http://localhost:8080/emp.html';
+            // 使用绝对路径
+          } else {
+            message.value = response.data.msg || '登录失败';
+          }
+        } catch (error) {
+          console.error('错误详情:', error);
+          message.value = '登录失败: ' + (error.message || '未知错误');
+        }
+      };
+
+      return { username, password, message, messageColor, login };
+    }
+  }).mount('#app');
+</script>
+</body>
+</html>

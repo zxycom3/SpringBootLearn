@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>简单跳转测试</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin: 10px;
+            cursor: pointer;
+        }
+        .test-area {
+            border: 1px solid #ccc;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<h1>简单页面跳转测试</h1>
+
+<div class="test-area">
+    <h2>测试1: 直接跳转</h2>
+    <button onclick="window.location.href = 'home.html'">跳转到home.html</button>
+    <p>点击按钮后应该立即跳转</p>
+</div>
+
+<div class="test-area">
+    <h2>测试2: 延迟跳转</h2>
+    <button onclick="delayedRedirect()">2秒后跳转</button>
+    <p>点击按钮后2秒跳转，会有提示信息</p>
+</div>
+
+<div class="test-area">
+    <h2>测试3: 替换当前页面</h2>
+    <button onclick="replacePage()">替换页面(无历史记录)</button>
+    <p>使用location.replace()方法</p>
+</div>
+
+<div class="test-area">
+    <h2>当前页面信息</h2>
+    <p id="pageInfo">正在加载...</p>
+    <button onclick="checkLocalStorage()">检查LocalStorage</button>
+</div>
+
+<script>
+    // 显示当前页面信息
+    document.getElementById('pageInfo').textContent =
+        `当前页面: ${window.location.href}`;
+
+    // 延迟跳转函数
+    function delayedRedirect() {
+        alert('2秒后将跳转到home.html');
+        setTimeout(function() {
+            window.location.href = 'home.html';
+        }, 2000);
+    }
+
+    // 替换页面函数
+    function replacePage() {
+        window.location.replace('home.html');
+    }
+
+    // 检查LocalStorage
+    function checkLocalStorage() {
+        const token = localStorage.getItem('jwtToken');
+        const username = localStorage.getItem('username');
+
+        if (token && username) {
+            alert(`LocalStorage中有数据:\n用户名: ${username}\nToken: ${token.substring(0, 20)}...`);
+        } else {
+            alert('LocalStorage中没有找到用户数据');
+        }
+    }
+
+    // 页面加载时检查
+    window.onload = function() {
+        console.log('页面加载完成');
+        const token = localStorage.getItem('jwtToken');
+        if (token) {
+            console.log('找到Token:', token.substring(0, 20) + '...');
+        }
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>员工及其部门管理系统</title>
+    <!-- 引入Vue3和Axios -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios@1.6.8/dist/axios.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "微软雅黑", sans-serif;
+        }
+        .container {
+            width: 95%;
+            margin: 20px auto;
+        }
+        /* 查询区域样式 */
+        .query-bar {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .query-bar input, .query-bar select, .query-bar button {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        /* 按钮组样式 */
+        .btn-group {
+            margin: 10px 0;
+        }
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #fff;
+            margin-right: 8px;
+        }
+        .btn-danger {
+            background: #dc3545;
+        }
+        .btn-primary {
+            background: #0d6efd;
+        }
+        /* 表格样式 */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background: #f8f9fa;
+        }
+        /* 弹窗样式 */
+        .dialog-mask {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.3);
+            z-index: 999;
+        }
+        .dialog {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            padding: 20px;
+            border-radius: 4px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+            z-index: 1000;
+            min-width: 350px;
+        }
+        .form-item {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .form-item label {
+            width: 80px;
+            text-align: right;
+        }
+        .form-item input, .form-item select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        /* 分页样式 */
+        .page-bar {
+            margin-top: 15px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        /* 头像占位 */
+        .avatar-placeholder {
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            background: #eee;
+            display: inline-block;
+            text-align: center;
+        }
+        /* 登录弹窗特殊样式 */
+        .login-dialog {
+            min-width: 300px;
+        }
+        .login-title {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        /* 顶部导航 */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background: #0d6efd;
+            color: #fff;
+        }
+        .logout-btn {
+            background: #dc3545;
+            border: none;
+            color: #fff;
+            padding: 6px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <!-- 顶部导航（登录后显示） -->
+    <div class="header" v-if="hasToken">
+        <h2>员工管理系统</h2>
+        <a href="/dept.html" class="btn btn-primary" style="margin-left: auto; margin-right: 15px;">部门管理</a>
+        <a href="/Data.html" class="btn btn-primary" style="margin-left: auto; margin-right: 15px;">数据展示</a>
+        <button class="logout-btn" @click="logout">退出登录</button>
+    </div>
+
+    <!-- 主内容区（登录后显示） -->
+    <div class="container" v-if="hasToken">
+        <!-- 查询区域 -->
+        <div class="query-bar">
+            <div>姓名：<input v-model="query.name" placeholder="请输入员工姓名"></div>
+            <div>性别：
+                <select v-model="query.gender">
+                    <option value="">请选择</option>
+                    <option value="1">男</option>
+                    <option value="2">女</option>
+                </select>
+            </div>
+            <div>入职时间：
+                <input type="date" v-model="query.begin"> 至
+                <input type="date" v-model="query.end">
+            </div>
+            <button class="btn btn-primary" @click="getEmpList">查询</button>
+            <button class="btn" @click="resetQuery">清空</button>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="btn-group">
+            <button class="btn btn-danger" @click="batchDelete" :disabled="selectedIds.length===0">批量删除</button>
+            <button class="btn btn-primary" @click="openAddDialog">新增员工</button>
+        </div>
+
+        <!-- 员工表格 -->
+        <table>
+            <thead>
+            <tr>
+                <th><input type="checkbox" @change="checkAll" v-model="allChecked"></th>
+                <th>姓名</th>
+                <th>头像</th>
+                <th>性别</th>
+                <th>职位</th>
+                <th>入职日期</th>
+                <th>最后操作时间</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="emp in empList" :key="emp.id">
+                <td><input type="checkbox" v-model="selectedIds" :value="emp.id"></td>
+                <td>{{ emp.name }}</td>
+                <td>
+                    <div v-if="emp.image">
+                        <img :src="emp.image" width="40" height="40" alt="头像" @error="emp.image=''">
+                    </div>
+                    <div v-else class="avatar-placeholder">加载失败</div>
+                </td>
+                <td>{{ emp.gender===1 ? '男' : '女' }}</td>
+                <td>{{ jobMap[emp.job] }}</td>
+                <td>{{ emp.entrydate }}</td>
+                <td>{{ emp.updateTime }}</td>
+                <td>
+                    <button class="btn btn-primary" @click="openEditDialog(emp.id)">编辑</button>
+                    <button class="btn btn-danger" @click="deleteEmp(emp.id)">删除</button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
+
+        <!-- 分页 -->
+        <div class="page-bar">
+            <span>共{{ total }}条，当前第{{ page }}页</span>
+            <button @click="page=1" :disabled="page===1">首页</button>
+            <button @click="page--" :disabled="page===1">上一页</button>
+            <button @click="page++" :disabled="page>=totalPage">下一页</button>
+            <span>每页{{ pageSize }}条</span>
+        </div>
+    </div>
+
+    <!-- 登录弹窗（未登录时显示） -->
+    <div class="dialog-mask" v-show="showLoginDialog"></div>
+    <div class="dialog login-dialog" v-show="showLoginDialog" @click.stop>
+        <div class="login-title">系统登录</div>
+        <div class="form-item">
+            <label>用户名：</label>
+            <input v-model="loginForm.username" placeholder="请输入用户名">
+        </div>
+        <div class="form-item">
+            <label>密码：</label>
+            <input type="password" v-model="loginForm.password" placeholder="请输入密码">
+        </div>
+        <div class="form-item">
+            <button class="btn btn-primary" @click="login" style="margin-left: 80px;">登录</button>
+        </div>
+    </div>
+
+    <!-- 新增/编辑弹窗 -->
+    <div class="dialog-mask" v-show="dialogVisible" @click="dialogVisible=false"></div>
+    <div class="dialog" v-show="dialogVisible" @click.stop>
+        <h3>{{ isEdit ? '编辑员工' : '新增员工' }}</h3>
+        <div class="form-item">
+            <label>姓名：</label>
+            <input v-model="empForm.name" placeholder="请输入姓名">
+        </div>
+        <div class="form-item">
+            <label>用户名：</label>
+            <input v-model="empForm.username" placeholder="请输入用户名">
+        </div>
+        <div class="form-item" v-if="!isEdit">
+            <label>密码：</label>
+            <input type="password" v-model="empForm.password" placeholder="请输入密码">
+        </div>
+        <div class="form-item">
+            <label>性别：</label>
+            <select v-model="empForm.gender">
+                <option value="1">男</option>
+                <option value="2">女</option>
+            </select>
+        </div>
+        <div class="form-item">
+            <label>职位：</label>
+            <select v-model="empForm.job">
+                <option value="1">班主任</option>
+                <option value="2">讲师</option>
+                <option value="3">学工主管</option>
+                <option value="4">教研主管</option>
+                <option value="5">咨询师</option>
+            </select>
+        </div>
+        <div class="form-item">
+            <label>入职日期：</label>
+            <input type="date" v-model="empForm.entrydate">
+        </div>
+        <div class="form-item">
+            <label>头像：</label>
+            <input type="file" accept="image/*" @change="uploadAvatar">
+            <span v-if="empForm.image">已上传头像</span>
+        </div>
+        <div class="form-item">
+            <button class="btn btn-primary" @click="submitForm">提交</button>
+            <button class="btn" @click="dialogVisible=false">取消</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const { createApp } = Vue;
+    createApp({
+        data() {
+            return {
+                // 登录相关
+                showLoginDialog: true, // 默认显示登录弹窗
+                loginForm: { username: '', password: '' },
+                // 分页参数
+                page: 1,
+                pageSize: 5,
+                total: 0,
+                // 查询条件
+                query: {
+                    name: '',
+                    gender: '',
+                    begin: '',
+                    end: ''
+                },
+                // 员工列表
+                empList: [],
+                // 选中的ID
+                selectedIds: [],
+                allChecked: false,
+                // 弹窗状态
+                dialogVisible: false,
+                isEdit: false,
+                // 员工表单
+                empForm: {
+                    id: null,
+                    username: '',
+                    password: '',
+                    name: '',
+                    gender: 1,
+                    image: '',
+                    job: 1,
+                    entrydate: '',
+                    deptId: 1 // 默认部门ID，可根据实际调整
+                },
+                // 职位映射
+                jobMap: {
+                    1: '班主任',
+                    2: '讲师',
+                    3: '学工主管',
+                    4: '教研主管',
+                    5: '咨询师'
+                }
+            }
+        },
+        computed: {
+            // 判断是否已登录（本地存储有token）
+            hasToken() {
+                return !!localStorage.getItem('token');
+            },
+            totalPage() {
+                return Math.ceil(this.total / this.pageSize);
+            }
+        },
+        mounted() {
+            // 初始化Axios拦截器（统一携带token）
+            this.initAxiosInterceptor();
+
+            // 如果已登录，直接加载员工列表
+            if (this.hasToken) {
+                this.showLoginDialog = false;
+                this.getEmpList();
+            }
+        },
+        methods: {
+            // 初始化Axios拦截器
+            initAxiosInterceptor() {
+                // 请求拦截器：添加Token到请求头
+                axios.interceptors.request.use(config => {
+                    const token = localStorage.getItem('token');
+                    if (token) {
+                        config.headers['token'] = token; // 对应后端获取token的key
+                    }
+                    return config;
+                }, error => {
+                    return Promise.reject(error);
+                });
+
+                // 响应拦截器：处理Token过期/无效
+                axios.interceptors.response.use(response => {
+                    return response;
+                }, error => {
+                    // 处理后端返回的NOT LOGIN错误
+                    if (error.response && error.response.data) {
+                        const res = error.response.data;
+                        if (res.code === 0 && res.msg === 'NOT+LOGIN') {
+                            // 清除无效token，显示登录弹窗
+                            localStorage.removeItem('token');
+                            this.showLoginDialog = true;
+                            this.loginForm = { username: '', password: '' };
+                            alert('登录已过期，请重新登录');
+                        }
+                    }
+                    return Promise.reject(error);
+                });
+            },
+
+            // 登录
+            async login() {
+                if (!this.loginForm.username || !this.loginForm.password) {
+                    alert('请输入用户名和密码');
+                    return;
+                }
+                try {
+                    // 调用后端登录接口（请根据你的实际登录接口路径修改）
+                    const res = await axios.post('/login', this.loginForm);
+                    if (res.data.code === 1) {
+                        // 登录成功，存储token
+                        localStorage.setItem('token', res.data.data); // 假设token存在res.data.data中
+                        this.showLoginDialog = false;
+                        this.getEmpList(); // 登录后加载员工列表
+                        alert('登录成功');
+                    } else {
+                        alert('登录失败：' + res.data.msg);
+                    }
+                } catch (err) {
+                    alert('登录失败：' + err.message);
+                }
+            },
+
+            // 退出登录
+            logout() {
+                localStorage.removeItem('token');
+                this.showLoginDialog = true;
+                this.loginForm = { username: '', password: '' };
+                this.empList = [];
+                this.selectedIds = [];
+            },
+
+            // 获取员工列表
+            async getEmpList() {
+                try {
+                    const res = await axios.get('/emps', {
+                        params: {
+                            page: this.page,
+                            pageSize: this.pageSize,
+                            name: this.query.name,
+                            gender: this.query.gender,
+                            begin: this.query.begin,
+                            end: this.query.end
+                        }
+                    });
+                    this.empList = res.data.data.rows;
+                    this.total = res.data.data.total;
+                    this.selectedIds = [];
+                    this.allChecked = false;
+                } catch (err) {
+                    console.error('查询失败：', err);
+                    // 无需重复处理NOT LOGIN，拦截器已处理
+                }
+            },
+
+            // 重置查询条件
+            resetQuery() {
+                this.query = { name: '', gender: '', begin: '', end: '' };
+                this.getEmpList();
+            },
+
+            // 全选
+            checkAll() {
+                this.selectedIds = this.allChecked
+                    ? this.empList.map(emp => emp.id)
+                    : [];
+            },
+
+            // 批量删除
+            batchDelete() {
+                if (!confirm('确定删除选中员工吗？')) return;
+                this.deleteEmp(this.selectedIds.join(','));
+            },
+
+            // 删除员工
+            async deleteEmp(ids) {
+                try {
+                    await axios.delete(`/emps/${ids}`);
+                    alert('删除成功');
+                    // 重置当前页（如果删完当前页数据）
+                    if (this.empList.length === (Array.isArray(ids) ? ids.length : 1) && this.page > 1) {
+                        this.page--;
+                    }
+                    this.getEmpList();
+                } catch (err) {
+                    console.error('删除失败：', err);
+                }
+            },
+
+            // 打开新增弹窗
+            openAddDialog() {
+                this.isEdit = false;
+                this.empForm = {
+                    id: null,
+                    username: '',
+                    password: '',
+                    name: '',
+                    gender: 1,
+                    image: '',
+                    job: 1,
+                    entrydate: '',
+                    deptId: 1
+                };
+                this.dialogVisible = true;
+            },
+
+            // 打开编辑弹窗
+            async openEditDialog(id) {
+                try {
+                    const res = await axios.get(`/emps/${id}`);
+                    this.empForm = res.data.data;
+                    // 日期格式转换为input支持的格式
+                    this.empForm.entrydate = this.empForm.entrydate.split('T')[0];
+                    this.isEdit = true;
+                    this.dialogVisible = true;
+                } catch (err) {
+                    alert('获取员工信息失败：' + err.message);
+                }
+            },
+
+            // 上传头像
+            async uploadAvatar(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const formData = new FormData();
+                formData.append('image', file);
+                try {
+                    const res = await axios.post('/upload', formData, {
+                        headers: { 'Content-Type': 'multipart/form-data' }
+                    });
+                    this.empForm.image = res.data.data;
+                    alert('头像上传成功');
+                } catch (err) {
+                    alert('头像上传失败：' + err.message);
+                }
+            },
+
+            // 提交表单
+            async submitForm() {
+                try {
+                    if (this.isEdit) {
+                        await axios.put('/emps', this.empForm);
+                    } else {
+                        await axios.post('/emps', this.empForm);
+                    }
+                    alert('操作成功');
+                    this.dialogVisible = false;
+                    this.getEmpList();
+                } catch (err) {
+                    alert('操作失败：' + err.message);
+                }
+            }
+        },
+        watch: {
+            page() { // 监听 page 变量的变化
+                this.getEmpList(); // 当 page 改变时，重新获取员工列表
+            },
+            pageSize() { // 监听 pageSize 变量的变化
+                this.page = 1; // 如果改变每页大小，通常会重置到第一页
+                this.getEmpList(); // 重新获取员工列表
+            },
+            // 也可以监听查询条件的变化来自动刷新
+            'query.name'() {
+                this.page = 1;
+                this.getEmpList();
+            },
+            'query.gender'() {
+                this.page = 1;
+                this.getEmpList();
+            },
+            'query.begin'() {
+                this.page = 1;
+                this.getEmpList();
+            },
+            'query.end'() {
+                this.page = 1;
+                this.getEmpList();
+            }
+        }
+
+    }).mount('#app');
+</script>
+</body>
+</html>
